@@ -149,7 +149,7 @@ export class YouTubeInterface {
 			return true;
 		}
 
-		if (this.pointer < queueLength) {
+		if (this.pointer <= queueLength) {
 			config.forgetItemsOnFinish ? await this.queue.delete(this.pointer - 1) : this.pointer++;
 
 			this.events.emit('next');
@@ -187,24 +187,25 @@ export class YouTubeInterface {
 					const youtubeVideo = YouTubeVideo.fromId(videoId);
 					const audioResource = await youtubeVideo.download();
 
-					if (!audioResource) throw Error('Could not resolve the audio resource from YouTube.');
+					// if (!audioResource) throw Error('Could not resolve the audio resource from YouTube.');
+					if (audioResource) {
+						this.currentResource = audioResource;
+						this.currentResource.volume?.setVolume(this.audioVolume);
+						this.player.play(this.currentResource);
 
-					this.currentResource = audioResource;
-					this.currentResource.volume?.setVolume(this.audioVolume);
-					this.player.play(this.currentResource);
+						this.player.once('error', () => {
+							throw Error('Bad audio resource, cannot continue.');
+						});
 
-					this.player.once('error', () => {
-						throw Error('Bad audio resource, cannot continue.');
-					});
-
-					// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-					// @ts-ignore Incorrect type error: Argument of type '"stateChange"' is not assignable to parameter of type 'AudioPlayerStatus.Idle'.
-					this.player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
-						if (oldState.status === 'playing' && newState.status === 'idle') {
-							const toResolve = await this.handleFinish();
-							resolve(toResolve);
-						}
-					});
+						// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+						// @ts-ignore Incorrect type error: Argument of type '"stateChange"' is not assignable to parameter of type 'AudioPlayerStatus.Idle'.
+						this.player.on('stateChange', async (oldState: AudioPlayerState, newState: AudioPlayerState) => {
+							if (oldState.status === 'playing' && newState.status === 'idle') {
+								const toResolve = await this.handleFinish();
+								resolve(toResolve);
+							}
+						});
+					}
 				} catch (error) {
 					console.error(error);
 					this.events.emit('next');
